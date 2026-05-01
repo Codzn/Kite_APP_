@@ -1,0 +1,42 @@
+# Nom de l'automatisme qui apparaîtra sur GitHub
+name: Envoi Alerte Kite Automatique
+
+on:
+  schedule:
+    # Cette ligne est en format "Cron". 
+    # '0 7 * * *' signifie : Tous les jours à 7h00 du matin (UTC)
+    - cron: '0 7 * * *'
+  
+  # Permet de lancer le code manuellement avec un bouton pour tester
+  workflow_dispatch: 
+
+jobs:
+  alerte_kite:
+    # On choisit le système d'exploitation (Linux est le plus rapide/gratuit)
+    runs-on: ubuntu-latest
+
+    steps:
+      # Étape 1 : Copier tes fichiers du dépôt vers l'ordinateur de GitHub
+      - name: Récupération du code
+        uses: actions/checkout@v3
+
+      # Étape 2 : Installer Python
+      - name: Installation de Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.9'
+
+      # Étape 3 : Installer tes bibliothèques (Pandas, etc.)
+      - name: Installation des bibliothèques
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      # Étape 4 : Lancer ton script avec les secrets
+      - name: Exécution du script d'alerte
+        env:
+          # On lie les secrets GitHub aux variables de ton code
+          EMAIL_USER: ${{ secrets.EMAIL_USER }}
+          EMAIL_FROM: ${{ secrets.EMAIL_FROM }}
+          MDP_EMAIL: ${{ secrets.MDP_EMAIL }}
+        run: python bot_alerte.py

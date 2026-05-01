@@ -1,0 +1,11 @@
+streamlit
+streamlit-folium
+folium
+pandas
+openrouteservice
+python-dotenv
+geopy
+requests
+openmeteo-requests
+requests-cache
+retry-requests
