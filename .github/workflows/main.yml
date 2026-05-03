@@ -39,4 +39,4 @@ jobs:
           EMAIL_USER: ${{ secrets.EMAIL_USER }}
           EMAIL_FROM: ${{ secrets.EMAIL_FROM }}
           MDP_EMAIL: ${{ secrets.MDP_EMAIL }}
-        run: python bot_alerte.py
+        run: python alerte.py
