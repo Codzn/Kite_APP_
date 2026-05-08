@@ -9,7 +9,8 @@ from geopy.geocoders import Nominatim
 from streamlit_folium import st_folium
 import requests
 
-# --- 1. CONFIGURATION INITIALE ---
+# --- CONFIGURATION INITIALE ---
+
 load_dotenv()
 API_KEY = os.getenv("API_KEY")
 client_ors = openrouteservice.Client(key=API_KEY)
@@ -23,7 +24,7 @@ SPOTS = {
     "Wissant": {"coords": [1.6626, 50.8853], "color": "blue"}
 }
 
-# --- 2. FONCTIONS UTILES ---
+# --- FONCTIONS UTILES ---
 
 @st.cache_data(ttl=300)
 def get_kite_data(lat, lon):
@@ -81,7 +82,7 @@ def créer_carte_interactive(route_geojson=None, depart_coords=None):
     m = folium.Map(location=[50.7, 2.0], zoom_start=9)
 
     for nom, info in SPOTS.items():
-        # --- NOUVEAU : On récupère le vent ---
+        # --- On récupère le vent ---
         vent = obtenir_conditions_vent(info["coords"][1], info["coords"][0])
         
         # Choix de la couleur : Vert si ça plane, Rouge sinon
@@ -112,7 +113,7 @@ def choisir_voile(vent):
     elif vent >= 15: return "11m²"
     return ""
 
-# --- 3. L'INTERFACE STREAMLIT ---
+# --- L'INTERFACE STREAMLIT ---
 
 st.title("🏄‍♂️ Kite Map : Itinéraire & Vent")
 
@@ -146,7 +147,7 @@ carte_finale = créer_carte_interactive(
 
 st_folium(carte_finale, width=1000, height=600)
 
-# --- 4. ZONE MÉTÉO ---
+# --- ZONE MÉTÉO ---
 st.divider()
 st.subheader("📊 État des spots en temps réel")
 
