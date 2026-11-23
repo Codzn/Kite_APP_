@@ -1,13 +1,14 @@
 import os
-import smtplib
+
 import folium
-import pandas as pd
 import streamlit as st
 import openrouteservice
 from dotenv import load_dotenv
 from geopy.geocoders import Nominatim
 from streamlit_folium import st_folium
 import requests
+
+from kite_logic import MIN_WIND_KNOTS, SPOTS, choisir_voile
 
 # --- CONFIGURATION INITIALE ---
 
@@ -17,13 +18,6 @@ client_ors = openrouteservice.Client(key=API_KEY)
 
 st.set_page_config(page_title="Kite Map & Météo", layout="wide")
 
-# Données fixes des spots
-SPOTS = {
-    "Berck": {"coords": [1.6, 50.4], "color": "blue"},
-    "Dunkerque": {"coords": [2.3768, 51.0344], "color": "blue"},
-    "Wissant": {"coords": [1.6626, 50.8853], "color": "blue"}
-}
-
 # --- FONCTIONS UTILES ---
 
 @st.cache_data(ttl=300)
@@ -32,7 +26,7 @@ def get_kite_data(lat, lon):
     try:
         # On demande le 'current' pour la carte et le 'hourly' pour le tableau
         url = f"https://api.open-meteo.com/v1/forecast?latitude={lat}&longitude={lon}&current=wind_speed_10m,wind_gusts_10m,wind_direction_10m&hourly=wind_speed_10m,wind_gusts_10m,wind_direction_10m&wind_speed_unit=kn&timezone=Europe/Paris&forecast_days=1"
-        response = requests.get(url).json()
+        response = requests.get(url, timeout=10).json()
         
         return {
             "current_speed": response['current']['wind_speed_10m'],
@@ -51,16 +45,17 @@ def obtenir_coords(adresse):
     location = geolocator.geocode(adresse, timeout=10)
     if location:
         return [location.longitude, location.latitude]
-    return st.error("Adresse introuvable")
+    st.error("Adresse introuvable")
+    return None
 
 @st.cache_data(ttl=300)
 def obtenir_conditions_vent(lat, lon):
     """Va chercher la vitesse du vent actuelle sur Open-Meteo."""
     try:
         url = f"https://api.open-meteo.com/v1/forecast?latitude={lat}&longitude={lon}&current=wind_speed_10m&wind_speed_unit=kn"
-        res = requests.get(url).json()
+        res = requests.get(url, timeout=10).json()
         return res['current']['wind_speed_10m']
-    except:
+    except Exception:
         return 0 # Si ça bug, on dit 0 par sécurité
 
 @st.cache_data(ttl=300)
@@ -86,7 +81,7 @@ def créer_carte_interactive(route_geojson=None, depart_coords=None):
         vent = obtenir_conditions_vent(info["coords"][1], info["coords"][0])
         
         # Choix de la couleur : Vert si ça plane, Rouge sinon
-        couleur = "green" if vent >= 15 else "red"
+        couleur = "green" if vent >= MIN_WIND_KNOTS else "red"
         
         folium.Marker(
             location=[info["coords"][1], info["coords"][0]],
@@ -106,13 +101,6 @@ def créer_carte_interactive(route_geojson=None, depart_coords=None):
         
     return m
     
-@st.cache_data(ttl=300)
-def choisir_voile(vent):
-    if vent >= 25: return "7m² "
-    elif vent >= 20: return "9m²"
-    elif vent >= 15: return "11m²"
-    return ""
-
 # --- L'INTERFACE STREAMLIT ---
 
 st.title("🏄‍♂️ Kite Map : Itinéraire & Vent")
@@ -164,8 +152,8 @@ for i, (nom_spot, info) in enumerate(SPOTS.items()):
         voile = choisir_voile(vent)
         
         # On définit la couleur selon la force
-        couleur_badge = "#c8e6c9" if vent >= 15 else "#ffccbc"
-        texte_couleur = "#2e7d32" if vent >= 15 else "#d84315"
+        couleur_badge = "#c8e6c9" if vent >= MIN_WIND_KNOTS else "#ffccbc"
+        texte_couleur = "#2e7d32" if vent >= MIN_WIND_KNOTS else "#d84315"
 
         with cols[i]:
             st.markdown(f"""
