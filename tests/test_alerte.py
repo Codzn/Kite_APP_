@@ -1,6 +1,10 @@
-import pandas as pd
+import smtplib
+from unittest.mock import patch
 
-from alerte import construire_html
+import pandas as pd
+import pytest
+
+from alerte import SMTP_ATTEMPTS, construire_html, envoyer_email
 
 
 def make_forecast(rows):
@@ -28,3 +32,48 @@ def test_html_lists_only_good_slots():
 def test_no_email_when_no_session():
     previsions = {"Berck": make_forecast([(5, 250), (8, 90)])}
     assert construire_html(previsions) is None
+
+
+# --- Email sending -----------------------------------------------------------
+
+
+@pytest.fixture
+def email_env(monkeypatch):
+    monkeypatch.setenv("EMAIL_USER", "destinataire@example.com")
+    monkeypatch.setenv("EMAIL_FROM", "expediteur@example.com")
+    monkeypatch.setenv("MDP_EMAIL", "mot-de-passe-fictif")
+
+
+def test_email_retries_after_a_temporary_error(email_env):
+    with patch("alerte.smtplib.SMTP") as mock_smtp, patch("alerte.time.sleep") as mock_sleep:
+        server = mock_smtp.return_value.__enter__.return_value
+        server.login.side_effect = [smtplib.SMTPServerDisconnected("closed"), None]
+
+        envoyer_email("<p>test</p>")
+
+    assert server.login.call_count == 2
+    server.send_message.assert_called_once()
+    mock_sleep.assert_called_once()
+
+
+def test_email_gives_up_after_all_attempts(email_env):
+    with patch("alerte.smtplib.SMTP") as mock_smtp, patch("alerte.time.sleep"):
+        server = mock_smtp.return_value.__enter__.return_value
+        server.login.side_effect = smtplib.SMTPServerDisconnected("closed")
+
+        with pytest.raises(RuntimeError, match="tentatives"):
+            envoyer_email("<p>test</p>")
+
+    assert server.login.call_count == SMTP_ATTEMPTS
+
+
+def test_wrong_password_is_not_retried(email_env):
+    with patch("alerte.smtplib.SMTP") as mock_smtp, patch("alerte.time.sleep") as mock_sleep:
+        server = mock_smtp.return_value.__enter__.return_value
+        server.login.side_effect = smtplib.SMTPAuthenticationError(535, b"bad credentials")
+
+        with pytest.raises(RuntimeError, match="MDP_EMAIL"):
+            envoyer_email("<p>test</p>")
+
+    assert server.login.call_count == 1
+    mock_sleep.assert_not_called()

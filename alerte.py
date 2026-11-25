@@ -1,5 +1,6 @@
 import os
 import smtplib
+import time
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
 
@@ -12,6 +13,8 @@ from retry_requests import retry
 from kite_logic import SPOTS, choisir_voile, date_en_francais, est_navigable
 
 FORECAST_DAYS = 14
+SMTP_ATTEMPTS = 3
+SMTP_RETRY_DELAY = 30  # seconds, multiplied by the attempt number (30 s, then 60 s)
 
 
 def recuperer_previsions():
@@ -126,10 +129,28 @@ def envoyer_email(html):
     msg["To"] = email_user
     msg.attach(MIMEText(html, "html", "utf-8"))
 
-    with smtplib.SMTP("smtp.gmail.com", 587, timeout=30) as server:
-        server.starttls()
-        server.login(email_from, mdp_email)
-        server.send_message(msg)
+    for tentative in range(1, SMTP_ATTEMPTS + 1):
+        try:
+            with smtplib.SMTP("smtp.gmail.com", 587, timeout=30) as server:
+                server.starttls()
+                server.login(email_from, mdp_email)
+                server.send_message(msg)
+            return
+        except smtplib.SMTPAuthenticationError as e:
+            # A wrong password will not fix itself: no point in trying again.
+            raise RuntimeError(
+                "Gmail a refusé l'identifiant ou le mot de passe. "
+                "Vérifie le mot de passe d'application dans le secret MDP_EMAIL."
+            ) from e
+        except (smtplib.SMTPException, OSError) as e:
+            # Temporary problem (connection closed, timeout...): wait and try again.
+            if tentative == SMTP_ATTEMPTS:
+                raise RuntimeError(
+                    f"Envoi impossible après {SMTP_ATTEMPTS} tentatives : {e}"
+                ) from e
+            attente = SMTP_RETRY_DELAY * tentative
+            print(f"Tentative {tentative}/{SMTP_ATTEMPTS} échouée ({e}). Nouvel essai dans {attente} s...")
+            time.sleep(attente)
 
 
 def main():
